@@ -1,0 +1,16 @@
+{
+  "name": "test-case",
+  "version": "1.0.0",
+  "description": "",
+  "main": "appium-clinikally-login.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "webdriverio": "^9.20.0"
+  }
+}
