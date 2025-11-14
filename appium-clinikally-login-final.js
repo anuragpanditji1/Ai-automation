@@ -120,6 +120,16 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
       fs.writeFileSync('/tmp/clinikally-login-with-number.png', screenshot, 'base64');
       console.log('📸 Screenshot saved to /tmp/clinikally-login-with-number.png');
 
+      // Dismiss keyboard first
+      try {
+        console.log('⌨️  Hiding keyboard...');
+        await driver.hideKeyboard();
+        await driver.pause(500);
+        console.log('✅ Keyboard hidden');
+      } catch (e) {
+        console.log('⚠️  Keyboard already hidden or not found');
+      }
+
       // PAGE 1: Click "Request OTP" button
       console.log('\n📄 PAGE 1: Looking for Request OTP button...');
       await driver.pause(1000);
@@ -127,9 +137,9 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
       let requestOtpButton;
       let foundRequestButton = false;
 
-      // Strategy 1: Find by text "Request OTP"
+      // Strategy 1: Find by text "Request OTP" (must be clickable)
       try {
-        const elements = await driver.$$('android=new UiSelector().textContains("Request")');
+        const elements = await driver.$$('android=new UiSelector().textContains("Request").clickable(true)');
         if (elements.length > 0) {
           requestOtpButton = elements[0];
           console.log('✅ Found Request OTP button (Strategy 1: text contains "Request")');
@@ -139,10 +149,10 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
         console.log('Strategy 1 failed, trying next...');
       }
 
-      // Strategy 2: Find by text "Get OTP"
+      // Strategy 2: Find by text "Get OTP" (must be clickable)
       if (!foundRequestButton) {
         try {
-          const elements = await driver.$$('android=new UiSelector().textContains("Get")');
+          const elements = await driver.$$('android=new UiSelector().textContains("Get").clickable(true)');
           if (elements.length > 0) {
             requestOtpButton = elements[0];
             console.log('✅ Found Request OTP button (Strategy 2: text contains "Get")');
@@ -170,7 +180,7 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
       // Strategy 4: Use coordinates as fallback
       if (!foundRequestButton) {
         console.log('⚠️  Could not find Request OTP button by text, using coordinates...');
-        console.log('👆 Clicking Request OTP at coordinates (846, 1034)...');
+        console.log('👆 Clicking Request OTP at coordinates (918, 1710)...');
 
         try {
           await driver.performActions([
@@ -179,7 +189,7 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
               id: 'finger1',
               parameters: { pointerType: 'touch' },
               actions: [
-                { type: 'pointerMove', duration: 0, x: 846, y: 1034 },
+                { type: 'pointerMove', duration: 0, x: 918, y: 1710 },
                 { type: 'pointerDown', button: 0 },
                 { type: 'pause', duration: 100 },
                 { type: 'pointerUp', button: 0 }
@@ -188,7 +198,7 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
           ]);
           await driver.releaseActions();
           await driver.pause(3000);
-          console.log('✅ Request OTP clicked at coordinates (846, 1034)');
+          console.log('✅ Request OTP clicked at coordinates (918, 1710)');
 
           // Take screenshot after requesting OTP
           screenshot = await driver.takeScreenshot();
@@ -366,8 +376,8 @@ console.log(`   Verify OTP: ${shouldRunVerify ? '✅' : '❌'}\n`);
       }
     } // End of verify section
 
-    console.log('\n⏸️  Keeping session open for 60 seconds for manual inspection...');
-    await driver.pause(60000);
+    console.log('\n⏸️  Keeping session open for 10 seconds for manual inspection...');
+    await driver.pause(10000);
 
   } catch (error) {
     console.error('\n❌ Error:', error.message);

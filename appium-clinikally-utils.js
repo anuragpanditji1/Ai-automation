@@ -59,14 +59,14 @@ async function performLogin(driver, phoneNumber, otp, reportTestCase) {
     console.log('\n📄 Clicking Request OTP arrow button...');
     await driver.pause(1000);
 
-    console.log('👆 Clicking arrow button at coordinates (846, 1034)...');
+    console.log('👆 Clicking arrow button at coordinates (918, 1710)...');
     await driver.performActions([
       {
         type: 'pointer',
         id: 'finger1',
         parameters: { pointerType: 'touch' },
         actions: [
-          { type: 'pointerMove', duration: 0, x: 846, y: 1034 },
+          { type: 'pointerMove', duration: 0, x: 918, y: 1710 },
           { type: 'pointerDown', button: 0 },
           { type: 'pause', duration: 100 },
           { type: 'pointerUp', button: 0 }
