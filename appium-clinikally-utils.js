@@ -197,21 +197,26 @@ async function isUserLoggedIn(driver) {
                           pageSource.includes('Profile') ||
                           pageSource.includes('My Orders');
 
+    // Check for home page indicators (user must be logged in to see these)
+    const hasHomeContent = pageSource.includes('Products by Categories') ||
+                          pageSource.includes('Search') ||
+                          pageSource.includes('Shop by');
+
     // If we see login button and no user content, user is not logged in
-    if (hasLoginButton && !hasUserContent) {
+    if (hasLoginButton && !hasUserContent && !hasHomeContent) {
       return false;
     }
 
-    // If we see user content, user is logged in
-    if (hasUserContent) {
+    // If we see user content or home content, user is logged in
+    if (hasUserContent || hasHomeContent) {
       return true;
     }
 
-    // Default to not logged in if unclear
-    return false;
+    // Default to logged in if unclear (since we use noReset: true)
+    return true;
   } catch (e) {
     console.error('Error checking login status:', e.message);
-    return false;
+    return true; // Assume logged in on error
   }
 }
 

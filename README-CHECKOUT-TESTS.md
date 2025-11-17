@@ -27,16 +27,17 @@ The test scripts use **shared login functionality** from `appium-clinikally-util
 
 ### 1. Logged User Checkout (`appium-clinikally-checkout-logged.js`)
 
-**Flow:** Ensure logged in → Add to cart → View cart → Checkout → Payment
+**Flow:** Ensure logged in → Verify page → Add to cart → View cart → Checkout → Payment
 
 **Steps:**
 1. **Auto-login if needed** (calls `ensureLoggedIn()` from shared utils)
-2. Search and select product
-3. Add product to cart
-4. View cart
-5. Proceed to checkout
-6. Select payment method
-7. (Optional) Complete payment
+2. **Verify current page** (checks we're on home screen, counts elements)
+3. Search and select product
+4. Add product to cart
+5. View cart
+6. Proceed to checkout
+7. Select payment method
+8. (Optional) Complete payment
 
 ### 2. Guest User Checkout (`appium-clinikally-checkout-guest.js`)
 
@@ -96,6 +97,9 @@ node appium-clinikally-checkout-guest.js
 
 **Logged User:**
 ```bash
+# Only verify page
+node appium-clinikally-checkout-logged.js verify
+
 # Only add to cart
 node appium-clinikally-checkout-logged.js add
 
