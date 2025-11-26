@@ -314,6 +314,8 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
             try {
               let cartButton;
               let buttonType = '';
+              let hasErrorToast = false; // Declare at higher scope
+              let hasSuccessIndicator = false; // Declare at higher scope
 
               // Try to find Add to Cart first
               try {
@@ -344,15 +346,69 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
               if (buttonType) {
                 console.log(`👆 Clicking "${buttonType}" button...`);
                 await cartButton.click();
-                await driver.pause(2000);
-                console.log(`✅ ${buttonType} button clicked`);
+                console.log(`✅ ${buttonType} button clicked - waiting for API response...`);
 
-                // Take screenshot after clicking button
+                // Wait for API response (2-3 seconds)
+                await driver.pause(3000);
+
+                // CRITICAL: Check if API call succeeded or failed
+                console.log('\n🔍 Verifying API response after Add to Cart...');
+
+                const pageSourceAfterClick = await driver.getPageSource();
+
+                // Check for error indicators
+                hasErrorToast = pageSourceAfterClick.includes('error') ||
+                                     pageSourceAfterClick.includes('Error') ||
+                                     pageSourceAfterClick.includes('failed') ||
+                                     pageSourceAfterClick.includes('Failed') ||
+                                     pageSourceAfterClick.includes('Something went wrong') ||
+                                     pageSourceAfterClick.includes('Try again') ||
+                                     pageSourceAfterClick.includes('Network error') ||
+                                     pageSourceAfterClick.includes('Unable to add');
+
+                hasSuccessIndicator = pageSourceAfterClick.includes('View Cart') ||
+                                           pageSourceAfterClick.includes('Keep Browsing') ||
+                                           pageSourceAfterClick.includes('Added to cart') ||
+                                           pageSourceAfterClick.includes('Item added') ||
+                                           pageSourceAfterClick.includes('success');
+
+                // Take screenshot after API response
                 screenshot = await driver.takeScreenshot();
                 fs.writeFileSync('/tmp/clinikally-checkout-cart-button-clicked.png', screenshot, 'base64');
                 console.log('📸 Screenshot saved to /tmp/clinikally-checkout-cart-button-clicked.png');
 
-                reportTestCase(`Click ${buttonType}`, 'PASS');
+                // Determine if API call succeeded or failed
+                if (hasErrorToast) {
+                  console.error('❌ API FAILED: Error detected after clicking Add to Cart');
+                  console.error('   Button was functional but API call failed');
+                  console.error('🚫 BLOCKER: Cannot continue without item in cart');
+
+                  // Take error screenshot
+                  screenshot = await driver.takeScreenshot();
+                  fs.writeFileSync('/tmp/clinikally-checkout-api-error.png', screenshot, 'base64');
+                  console.log('📸 Error screenshot saved to /tmp/clinikally-checkout-api-error.png');
+
+                  // Mark as BLOCKER and stop execution
+                  const isBlocker = reportTestCase(`Click ${buttonType}`, 'FAIL', 'Button clicked but Add to Cart API failed - BLOCKER', true);
+
+                  // Skip all remaining tests
+                  reportTestCase('View All Coupons', 'FAIL', 'SKIPPED - Blocked by Add to Cart failure', false);
+                  reportTestCase('Apply Coupon', 'FAIL', 'SKIPPED - Blocked by Add to Cart failure', false);
+                  reportTestCase('Select Address', 'FAIL', 'SKIPPED - Blocked by Add to Cart failure', false);
+                  reportTestCase('Checkout', 'FAIL', 'SKIPPED - Blocked by Add to Cart failure', false);
+
+                  if (isBlocker) {
+                    console.log('\n⏸️  Keeping session open for 30 seconds to inspect error state...');
+                    await driver.pause(30000);
+                    throw new Error('Add to Cart API failed - blocking test execution');
+                  }
+                } else if (hasSuccessIndicator) {
+                  console.log('✅ API SUCCESS: Item added to cart successfully');
+                  reportTestCase(`Click ${buttonType}`, 'PASS', 'Button clicked and API succeeded');
+                } else {
+                  console.log('⚠️  UNCLEAR: Cannot confirm API success or failure');
+                  reportTestCase(`Click ${buttonType}`, 'WARN', 'API response unclear - no success or error indicator found');
+                }
               } else {
                 console.error('❌ Neither "Add to Cart" nor "View Cart" found');
                 reportTestCase('Click Cart Button', 'FAIL', 'Neither Add to Cart nor View Cart found', false);
@@ -361,29 +417,79 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
 
               // If we clicked "Add to Cart", we need to click "Keep Browsing" then cart icon
               // If we clicked "View Cart", we're already in cart view
-              if (buttonType === 'Add to Cart') {
-                // Click Keep Browsing button
-                console.log('\n👆 Clicking "Keep Browsing" button...');
-                const keepBrowsingBtn = await driver.$('android=new UiSelector().text("Keep Browsing")');
-                await keepBrowsingBtn.click();
-                await driver.pause(2000);
-                console.log('✅ Keep Browsing button clicked');
+              if (buttonType === 'Add to Cart' && !hasErrorToast) {
+                // Only proceed if API succeeded (no error detected)
+                console.log('\n👆 Looking for "Keep Browsing" button...');
 
-                // Take screenshot after keep browsing
-                screenshot = await driver.takeScreenshot();
-                fs.writeFileSync('/tmp/clinikally-checkout-keep-browsing.png', screenshot, 'base64');
-                console.log('📸 Screenshot saved to /tmp/clinikally-checkout-keep-browsing.png');
+                try {
+                  const keepBrowsingBtn = await driver.$('android=new UiSelector().text("Keep Browsing")');
+                  const isKeepBrowsingDisplayed = await keepBrowsingBtn.isDisplayed();
 
-                reportTestCase('Click Keep Browsing', 'PASS');
+                  if (isKeepBrowsingDisplayed) {
+                    console.log('✅ Found "Keep Browsing" button');
+                    await keepBrowsingBtn.click();
+                    await driver.pause(2000);
+                    console.log('✅ Keep Browsing button clicked');
 
-                // Click cart icon with description "1"
-                console.log('\n🛒 Clicking cart icon (description "1")...');
-                const cartIcon = await driver.$('android=new UiSelector().description("1")');
-                await cartIcon.click();
-                await driver.pause(2000);
-                console.log('✅ Cart icon clicked');
+                    // Take screenshot after keep browsing
+                    screenshot = await driver.takeScreenshot();
+                    fs.writeFileSync('/tmp/clinikally-checkout-keep-browsing.png', screenshot, 'base64');
+                    console.log('📸 Screenshot saved to /tmp/clinikally-checkout-keep-browsing.png');
 
-                reportTestCase('Click Cart Icon', 'PASS');
+                    reportTestCase('Click Keep Browsing', 'PASS');
+
+                    // Click cart icon to verify item is in cart
+                    console.log('\n🛒 Clicking cart icon to verify item added...');
+
+                    try {
+                      // Try to find cart icon with count badge (description "1" or "2" etc)
+                      let cartIcon;
+                      let cartCount = '';
+
+                      for (let i = 1; i <= 5; i++) {
+                        try {
+                          cartIcon = await driver.$(`android=new UiSelector().description("${i}")`);
+                          const isCartIconDisplayed = await cartIcon.isDisplayed();
+                          if (isCartIconDisplayed) {
+                            cartCount = i.toString();
+                            console.log(`✅ Found cart icon with count: ${cartCount}`);
+                            break;
+                          }
+                        } catch (e) {
+                          // Try next number
+                        }
+                      }
+
+                      if (cartIcon && cartCount) {
+                        await cartIcon.click();
+                        await driver.pause(2000);
+                        console.log(`✅ Cart icon clicked (${cartCount} item(s) in cart)`);
+                        reportTestCase('Click Cart Icon', 'PASS', `Cart has ${cartCount} item(s)`);
+                        reportTestCase('Verify Item Added to Cart', 'PASS', 'Cart count updated');
+                      } else {
+                        console.log('⚠️  Cart icon not found with count badge - trying fallback...');
+                        // Fallback: try clicking cart icon by resource-id or class
+                        const cartIconFallback = await driver.$('android=new UiSelector().descriptionContains("cart")');
+                        await cartIconFallback.click();
+                        await driver.pause(2000);
+                        console.log('✅ Cart icon clicked (fallback)');
+                        reportTestCase('Click Cart Icon', 'WARN', 'Cart clicked but count not verified');
+                      }
+                    } catch (e) {
+                      console.error('❌ Cart icon not found:', e.message);
+                      reportTestCase('Click Cart Icon', 'FAIL', `Cart icon not found: ${e.message}`, false);
+                    }
+                  } else {
+                    console.log('⚠️  "Keep Browsing" button not displayed');
+                    reportTestCase('Click Keep Browsing', 'WARN', 'Button not displayed');
+                  }
+                } catch (e) {
+                  console.error('❌ Error with Keep Browsing flow:', e.message);
+                  reportTestCase('Keep Browsing Flow', 'FAIL', e.message, false);
+                }
+              } else if (buttonType === 'Add to Cart' && hasErrorToast) {
+                console.log('⚠️  Skipping Keep Browsing - API failed, item not added');
+                reportTestCase('Keep Browsing Flow', 'FAIL', 'Skipped due to API failure', false);
               } else {
                 console.log('ℹ️  Already in cart view after clicking "View Cart"');
               }
@@ -464,20 +570,43 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
                 if (couponsBtnFound) {
                   console.log('\n👆 Clicking "View All Coupons" button...');
                   await couponsButton.click();
+                  console.log('✅ Coupons button clicked - waiting for API response...');
                   await driver.pause(3000);
-                  console.log('✅ Coupons button clicked');
+
+                  // Check if API call succeeded
+                  console.log('🔍 Verifying coupons API response...');
+                  const couponsPageSource = await driver.getPageSource();
+
+                  const hasCouponsError = couponsPageSource.includes('error') ||
+                                         couponsPageSource.includes('Error') ||
+                                         couponsPageSource.includes('Failed to load') ||
+                                         couponsPageSource.includes('Try again');
+
+                  const hasCouponsData = couponsPageSource.includes('12%') ||
+                                        couponsPageSource.includes('10%') ||
+                                        couponsPageSource.includes('Tap to apply') ||
+                                        couponsPageSource.includes('SUMMER');
 
                   // Take screenshot of coupons page
                   screenshot = await driver.takeScreenshot();
                   fs.writeFileSync('/tmp/clinikally-checkout-coupons-page.png', screenshot, 'base64');
                   console.log('📸 Screenshot saved to /tmp/clinikally-checkout-coupons-page.png');
 
-                  reportTestCase('Click View All Coupons', 'PASS');
+                  if (hasCouponsError) {
+                    console.error('❌ API FAILED: Coupons failed to load');
+                    reportTestCase('Click View All Coupons', 'FAIL', 'Button clicked but API failed - coupons not loaded', false);
+                  } else if (hasCouponsData) {
+                    console.log('✅ API SUCCESS: Coupons loaded successfully');
+                    reportTestCase('Click View All Coupons', 'PASS', 'Coupons loaded successfully');
+                  } else {
+                    console.log('⚠️  UNCLEAR: Cannot confirm coupons loaded');
+                    reportTestCase('Click View All Coupons', 'WARN', 'Coupons API response unclear');
+                  }
 
                   // Verify we're on coupons page (not cart page) to avoid entering text in wrong place
                   console.log('\n🔍 Verifying coupons page...');
                   await driver.pause(1000);
-                  const couponsPageSource = await driver.getPageSource();
+                  // Reuse couponsPageSource from above
                   const isOnCouponsPage = couponsPageSource.includes('Enter Coupon Code') ||
                                          couponsPageSource.includes('Tap to apply') ||
                                          couponsPageSource.includes('Summer Savings');
@@ -551,15 +680,40 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
                       if (applyButtonFound) {
                         console.log('\n👆 Clicking "Tap to apply" button for 12% off coupon...');
                         await applyButton.click();
+                        console.log('✅ Apply button clicked - waiting for API response...');
                         await driver.pause(3000);
-                        console.log('✅ 12% off coupon applied');
+
+                        // Check if coupon apply API succeeded
+                        console.log('🔍 Verifying coupon apply API response...');
+                        const couponApplySource = await driver.getPageSource();
+
+                        const hasCouponError = couponApplySource.includes('Invalid coupon') ||
+                                              couponApplySource.includes('Coupon expired') ||
+                                              couponApplySource.includes('Failed to apply') ||
+                                              couponApplySource.includes('error') ||
+                                              couponApplySource.includes('not valid');
+
+                        const hasCouponSuccess = couponApplySource.includes('YOU saved') ||
+                                                couponApplySource.includes('Applied successfully') ||
+                                                couponApplySource.includes('Woohoo') ||
+                                                couponApplySource.includes('saved') ||
+                                                couponApplySource.includes('Discount applied');
 
                         // Take screenshot after applying coupon
                         screenshot = await driver.takeScreenshot();
                         fs.writeFileSync('/tmp/clinikally-checkout-coupon-applied.png', screenshot, 'base64');
                         console.log('📸 Screenshot saved to /tmp/clinikally-checkout-coupon-applied.png');
 
-                        reportTestCase('Apply 12% Off Coupon', 'PASS');
+                        if (hasCouponError) {
+                          console.error('❌ API FAILED: Coupon apply failed');
+                          reportTestCase('Apply 12% Off Coupon', 'FAIL', 'Button clicked but API failed - coupon not applied', false);
+                        } else if (hasCouponSuccess) {
+                          console.log('✅ API SUCCESS: 12% off coupon applied successfully');
+                          reportTestCase('Apply 12% Off Coupon', 'PASS', 'Coupon applied successfully');
+                        } else {
+                          console.log('⚠️  UNCLEAR: Cannot confirm coupon applied');
+                          reportTestCase('Apply 12% Off Coupon', 'WARN', 'Coupon apply API response unclear');
+                        }
 
                         // Look for success popup with "YOU saved" and click "Thanks" button
                         console.log('\n🔍 Looking for success popup...');
@@ -817,10 +971,45 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
                                 // Click on first address's "Deliver Here" button
                                 console.log('\n👆 Clicking on first address "Deliver Here" button...');
                                 await deliverHereButtons[0].click();
+                                console.log('✅ Deliver Here button clicked - waiting for API response...');
                                 await driver.pause(3000);
-                                console.log('✅ Address selected');
 
-                                reportTestCase('Select Address', 'PASS', 'Selected first address');
+                                // Check if address selection API succeeded
+                                console.log('🔍 Verifying address selection API response...');
+                                const addressSelectSource = await driver.getPageSource();
+
+                                const hasAddressError = addressSelectSource.includes('Failed to update') ||
+                                                       addressSelectSource.includes('error') ||
+                                                       addressSelectSource.includes('Try again') ||
+                                                       addressSelectSource.includes('Unable to select');
+
+                                const hasAddressSuccess = addressSelectSource.includes('Bill Summary') ||
+                                                         addressSelectSource.includes('Order Summary') ||
+                                                         addressSelectSource.includes('Checkout') ||
+                                                         addressSelectSource.includes('Total');
+
+                                if (hasAddressError) {
+                                  console.error('❌ API FAILED: Address selection failed');
+                                  console.error('🚫 BLOCKER: Cannot checkout without delivery address');
+
+                                  // Mark as BLOCKER and stop execution
+                                  const isBlocker = reportTestCase('Select Address', 'FAIL', 'Button clicked but Address Selection API failed - BLOCKER', true);
+
+                                  // Skip remaining tests
+                                  reportTestCase('Checkout', 'FAIL', 'SKIPPED - Blocked by Address Selection failure', false);
+
+                                  if (isBlocker) {
+                                    console.log('\n⏸️  Keeping session open for 30 seconds to inspect error state...');
+                                    await driver.pause(30000);
+                                    throw new Error('Address Selection API failed - blocking test execution');
+                                  }
+                                } else if (hasAddressSuccess) {
+                                  console.log('✅ API SUCCESS: Address selected successfully');
+                                  reportTestCase('Select Address', 'PASS', 'Address selected and cart updated');
+                                } else {
+                                  console.log('⚠️  UNCLEAR: Cannot confirm address selected');
+                                  reportTestCase('Select Address', 'WARN', 'Address selection API response unclear');
+                                }
 
                                 // Take screenshot after selecting address
                                 screenshot = await driver.takeScreenshot();
@@ -884,15 +1073,48 @@ function reportTestCase(name, status, message = '', isBlocker = false) {
                                 if (checkoutFound) {
                                   console.log('\n👆 Clicking Checkout button...');
                                   await checkoutButton.click();
+                                  console.log('✅ Checkout button clicked - waiting for API response...');
                                   await driver.pause(4000);
-                                  console.log('✅ Checkout button clicked');
 
-                                  reportTestCase('Click Checkout Button', 'PASS');
+                                  // Check if checkout API succeeded
+                                  console.log('🔍 Verifying checkout API response...');
+                                  const checkoutApiSource = await driver.getPageSource();
+
+                                  const hasCheckoutError = checkoutApiSource.includes('Failed to proceed') ||
+                                                          checkoutApiSource.includes('error') ||
+                                                          checkoutApiSource.includes('Something went wrong') ||
+                                                          checkoutApiSource.includes('Try again') ||
+                                                          checkoutApiSource.includes('Unable to checkout');
+
+                                  const hasCheckoutSuccess = checkoutApiSource.includes('Confirm and Pay') ||
+                                                            checkoutApiSource.includes('Place Order') ||
+                                                            checkoutApiSource.includes('Pay Now') ||
+                                                            checkoutApiSource.includes('Payment');
 
                                   // Take screenshot of checkout page
                                   screenshot = await driver.takeScreenshot();
                                   fs.writeFileSync('/tmp/clinikally-checkout-page.png', screenshot, 'base64');
                                   console.log('📸 Screenshot saved to /tmp/clinikally-checkout-page.png');
+
+                                  if (hasCheckoutError) {
+                                    console.error('❌ API FAILED: Checkout failed');
+                                    console.error('🚫 BLOCKER: Cannot proceed to payment');
+
+                                    // Mark as BLOCKER and stop execution
+                                    const isBlocker = reportTestCase('Click Checkout Button', 'FAIL', 'Button clicked but Checkout API failed - BLOCKER', true);
+
+                                    if (isBlocker) {
+                                      console.log('\n⏸️  Keeping session open for 30 seconds to inspect error state...');
+                                      await driver.pause(30000);
+                                      throw new Error('Checkout API failed - blocking test execution');
+                                    }
+                                  } else if (hasCheckoutSuccess) {
+                                    console.log('✅ API SUCCESS: Checkout processed successfully');
+                                    reportTestCase('Click Checkout Button', 'PASS', 'Checkout API succeeded');
+                                  } else {
+                                    console.log('⚠️  UNCLEAR: Cannot confirm checkout success');
+                                    reportTestCase('Click Checkout Button', 'WARN', 'Checkout API response unclear');
+                                  }
 
                                   // Verify checkout page details match cart page
                                   console.log('\n🔍 Verifying checkout page details...');
