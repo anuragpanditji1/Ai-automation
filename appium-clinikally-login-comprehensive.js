@@ -40,89 +40,6 @@ class TestUtils {
     }
   }
 
-  static async navigateToLoginPage(driver) {
-    console.log('🔍 Checking if on login page...');
-
-    // First check if already on login page
-    try {
-      const editTexts = await driver.$$('android.widget.EditText');
-      if (editTexts.length > 0) {
-        console.log('✅ Already on login page');
-        return true;
-      }
-    } catch (e) {}
-
-    console.log('⚠️  Not on login page, navigating to Profile...');
-
-    // Look for Profile tab/button
-    try {
-      // Strategy 1: Find by text "Profile"
-      let profileButton = await driver.$('android=new UiSelector().textContains("Profile")');
-      if (profileButton) {
-        console.log('✅ Found Profile button');
-        await profileButton.click();
-        await driver.pause(2000);
-        console.log('✅ Clicked Profile tab');
-      }
-    } catch (e) {
-      console.log('⚠️  Profile button not found by text, trying other methods...');
-
-      // Strategy 2: Find by description
-      try {
-        const profileButton = await driver.$('android=new UiSelector().descriptionContains("profile")');
-        if (profileButton) {
-          console.log('✅ Found Profile by description');
-          await profileButton.click();
-          await driver.pause(2000);
-        }
-      } catch (e2) {
-        console.log('⚠️  Could not find Profile tab');
-      }
-    }
-
-    // Now look for Sign In button
-    try {
-      console.log('🔍 Looking for Sign In button...');
-
-      // Strategy 1: Text "Sign In"
-      let signInButton = await driver.$('android=new UiSelector().textContains("Sign In")');
-      if (signInButton) {
-        console.log('✅ Found Sign In button');
-        await signInButton.click();
-        await driver.pause(3000);
-        console.log('✅ Clicked Sign In button');
-        return true;
-      }
-    } catch (e) {}
-
-    // Strategy 2: Text "Sign in" (lowercase)
-    try {
-      const signInButton = await driver.$('android=new UiSelector().textContains("Sign in")');
-      if (signInButton) {
-        console.log('✅ Found Sign in button');
-        await signInButton.click();
-        await driver.pause(3000);
-        console.log('✅ Clicked Sign in button');
-        return true;
-      }
-    } catch (e) {}
-
-    // Strategy 3: Text "Login"
-    try {
-      const loginButton = await driver.$('android=new UiSelector().textContains("Login")');
-      if (loginButton) {
-        console.log('✅ Found Login button');
-        await loginButton.click();
-        await driver.pause(3000);
-        console.log('✅ Clicked Login button');
-        return true;
-      }
-    } catch (e) {}
-
-    console.log('⚠️  Could not find Sign In button');
-    return false;
-  }
-
   static async findPhoneInput(driver) {
     console.log('🔍 Looking for phone input field...');
 
@@ -158,9 +75,6 @@ class TestUtils {
   }
 
   static async enterPhoneNumber(driver, phoneNumber) {
-    // First navigate to login page if not already there
-    await this.navigateToLoginPage(driver);
-
     const phoneInput = await this.findPhoneInput(driver);
     if (!phoneInput) {
       throw new Error('Phone input field not found');
@@ -536,9 +450,6 @@ class LoginTestCases {
 
     try {
       await TestUtils.restartApp(driver);
-
-      // Navigate to login page first
-      await TestUtils.navigateToLoginPage(driver);
       await TestUtils.takeScreenshot(driver, 'tc5-initial');
 
       console.log('⚠️  Not entering phone number (leaving empty)');
